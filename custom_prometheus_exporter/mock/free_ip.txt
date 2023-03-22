@@ -1,2 +1,0 @@
-free ip: 4
-use ip: 250
