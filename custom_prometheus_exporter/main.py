@@ -1,29 +1,29 @@
 import requests
-from prometheus_client import start_http_server, Summary
+from prometheus_client import Counter, Gauge, start_http_server
 
-# Создаем метрику, которую будем собирать
-REQUEST_TIME = Summary('request_processing_seconds', 'Time spent processing request')
-
-# Функция для отправки запроса
-@REQUEST_TIME.time()
-def make_request():
-    url = "https://api.example.com/my_endpoint"
-    payload = {"param1": "value1", "param2": "value2"}
-    headers = {"Authorization": "Bearer MY_TOKEN"}
-    response = requests.post(url, json=payload, headers=headers)
-    return response.json()
-
-# Запустим HTTP-сервер на 8000 порту
+# стартуем сервер Prometheus
 start_http_server(8000)
 
-# Основной цикл программы
-if __name__ == '__main__':
-    while True:
-        # Получим ответ от сервера
-        response = make_request()
+# создаем метрики для сбора статистки
+c = Counter('api_request_total', 'Total number of requests to API server')
+g = Gauge('api_free_ips', 'Number of free IPs returned from API server')
 
-        # Добавим данные в метрику
-        REQUEST_TIME.observe(response['processing_time'])
+# URL API сервера
+url = 'https://api.example.com'
 
-        # Выведем ответ на страницу
-        print(f"Received response: {response}")
+# отправляем POST-запрос с параметром "data"
+response = requests.post(url, data={'some_data': 123})
+
+# проверяем код ответа
+if response.status_code == 200:
+    # если запрос прошел успешно, парсим ответ и собираем статистику
+    result = response.json()
+    free_ips = result.get('free_ips')
+    if free_ips is not None:
+        c.inc()
+        g.set(free_ips)
+
+# выводим метрики в формате Prometheus на страницу http.server
+while True:
+    print("api_request_total: ", c._value.get())
+    print("api_free_ips: ", g._value.get())
