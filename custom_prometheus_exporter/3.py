@@ -57,5 +57,53 @@ if __name__ == '__main__':
         process_data()
 
 
+import requests
+from prometheus_client import start_http_server, Gauge
 
+# Создаем метрику для хранения ответа REST API
+response_metric = Gauge('response_metric', 'Response metric description')
+
+# Функция для выполнения GET-запроса к REST API и получения ответа в JSON-формате
+def get_api_response():
+    response = requests.get('https://api.example.com/')
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return None
+
+# Функция для обновления метрики с новыми значениями из REST API
+def update_metrics():
+    api_response = get_api_response()
+    if api_response:
+        response_metric.set(api_response['metric_value'])
+
+# Запускаем HTTP-сервер Prometheus экспортера
+start_http_server(8000)
+
+# Бесконечный цикл для обновления метрик каждую минуту
+while True:
+    update_metrics()
+    time.sleep(60)
+
+
+import requests
+from prometheus_client import Gauge, start_http_server
+
+# Создаем метрику
+REQUESTS_POST_METRIC = Gauge('requests_post_metric', 'Запрос на API POST', ['status_code'])
+
+# Отправляем POST-запрос и выводим ответ в виде метрики
+def request_post(url, data):
+    resp = requests.post(url, data=data)
+    REQUESTS_POST_METRIC.labels(status_code=resp.status_code).inc()
+    return resp.text
+
+# Запускаем сервер для метрик Prometheus
+if __name__ == '__main__':
+    start_http_server(8000)
+
+    # Выполняем POST-запросы и выводим ответы в виде метрик
+    url = 'http://example.com/api'
+    data = {'key': 'value'}
+    response = request_post(url, data)
 
