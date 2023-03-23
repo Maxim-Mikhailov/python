@@ -1,23 +1,29 @@
 import requests
-from prometheus_client import Metric, REGISTRY, CollectorRegistry, push_to_gateway
-from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily
+from prometheus_client import start_http_server, Summary
 
-class MyExporter(object):
-    def collect(self):
-        response = requests.get('https://api.example.com')
-        json_data = response.json()
+# Создаем метрику, которую будем собирать
+REQUEST_TIME = Summary('request_processing_seconds', 'Time spent processing request')
 
-        metric = GaugeMetricFamily('example_metric', 'Example metric description', labels=['label1'])
-        metric.add_metric(['value1'], json_data['value'])
+# Функция для отправки запроса
+@REQUEST_TIME.time()
+def make_request():
+    url = "https://api.example.com/my_endpoint"
+    payload = {"param1": "value1", "param2": "value2"}
+    headers = {"Authorization": "Bearer MY_TOKEN"}
+    response = requests.post(url, json=payload, headers=headers)
+    return response.json()
 
-        yield metric
+# Запустим HTTP-сервер на 8000 порту
+start_http_server(8000)
 
+# Основной цикл программы
 if __name__ == '__main__':
-    registry = CollectorRegistry()
-    registry.register(MyExporter())
-    push_to_gateway('localhost:9091', job='my_job', registry=registry)
+    while True:
+        # Получим ответ от сервера
+        response = make_request()
 
+        # Добавим данные в метрику
+        REQUEST_TIME.observe(response['processing_time'])
 
-
-
-
+        # Выведем ответ на страницу
+        print(f"Received response: {response}")
