@@ -1,109 +1,77 @@
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import requests
-from prometheus_client import start_http_server, Gauge
 
-# Создаем Gauge метрики Prometheus
-metric1 = Gauge('metric1', 'Описание метрики 1')
-metric2 = Gauge('metric2', 'Описание метрики 2')
+# Адрес, на котором будет доступна веб-страница
+HOST_NAME = '127.0.0.1'
+PORT_NUMBER = 8000
 
-# Отправляем GET-запрос к REST API и получаем данные
-response = requests.get('https://example.com/api')
-data = response.json()
-
-# Обрабатываем данные и передаем их в формате Prometheus
-metric1.set(data['value1'])
-metric2.set(data['value2'])
-
-# Запускаем Prometheus HTTP-сервер на порту 8000
-start_http_server(8000)
+# URL для запроса к API
+API_URL = "https://example.com/api"
 
 
+# Функция, которая делает POST запрос к API, получает два значения в ответе и выводит их в нужном формате для Prometheus
+def collect_data():
+    response = requests.post(API_URL, json={'data1': 'value1', 'data2': 'value2'})
+
+    # Получение значений из ответа
+    value1 = response.json().get('data1')
+    value2 = response.json().get('data2')
+
+    # Вывод данных в формате, который использует Prometheus для сбора метрик
+    output = "# HELP custom_metric_1 Description of custom_metric_1\n# TYPE custom_metric_1 gauge\ncustom_metric_1{value=\"" + str(
+        value1) + "\"} " + str(value1) + "\n"
+    output += "# HELP custom_metric_2 Description of custom_metric_2\n# TYPE custom_metric_2 gauge\ncustom_metric_2{value=\"" + str(
+        value2) + "\"} " + str(value2) + "\n"
+
+    return output
 
 
+# Класс запроса
+class MyHandler(BaseHTTPRequestHandler):
+
+    # Ответ на GET запрос
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+
+        # Получение данных с помощью функции collect_data() и их вывод
+        data = collect_data()
+        self.wfile.write(data.encode())
+        return
 
 
-
-import requests
-from prometheus_client import start_http_server, Gauge
-
-# создаём объект Gauge (метрика)
-response_time_metric = Gauge('api_response_time_seconds', 'Response time of API in seconds')
-
-# направляем GET-запрос к REST API и измеряем время ответа
-def get_api_data():
+# Запуск веб-сервера
+if __name__ == '__main__':
+    httpd = HTTPServer((HOST_NAME, PORT_NUMBER), MyHandler)
+    print('Server started on port', PORT_NUMBER)
     try:
-        response = requests.get(url='https://example.com/api', timeout=10)
-        response_time = response.elapsed.total_seconds()
-        if response.status_code == 200:
-            json_data = response.json()
-            return json_data, response_time
-        else:
-            return None, response_time
-    except requests.exceptions.RequestException as e:
-        print(e)
-        return None, 0
-
-# обрабатываем данные и передаём их в Prometheus метрику
-def process_data():
-    data, response_time = get_api_data()
-    if data is not None:
-        # производим дальнейшую обработку данных в формате JSON
+        httpd.serve_forever()
+    except KeyboardInterrupt:
         pass
-    response_time_metric.set(response_time)
-
-# запускаем HTTP-сервер Prometheus на порту 8000 и производим обработку данных
-if __name__ == '__main__':
-    start_http_server(8000)
-    while True:
-        process_data()
+    httpd.server_close()
+    print('Server stopped.')
 
 
+
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import requests
-from prometheus_client import start_http_server, Gauge
 
-# Создаем метрику для хранения ответа REST API
-response_metric = Gauge('response_metric', 'Response metric description')
+class MyRequestHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/metrics':
+            response = requests.post('https://example.com/api/endpoint', data={'param1': 'value1', 'param2': 'value2'})
+            data = response.json()
 
-# Функция для выполнения GET-запроса к REST API и получения ответа в JSON-формате
-def get_api_response():
-    response = requests.get('https://api.example.com/')
-    if response.status_code == 200:
-        return response.json()
-    else:
-        return None
+            metrics = f'my_metric{{param1="{data["param1"]}",param2="{data["param2"]}"}} 1\n'
 
-# Функция для обновления метрики с новыми значениями из REST API
-def update_metrics():
-    api_response = get_api_response()
-    if api_response:
-        response_metric.set(api_response['metric_value'])
-
-# Запускаем HTTP-сервер Prometheus экспортера
-start_http_server(8000)
-
-# Бесконечный цикл для обновления метрик каждую минуту
-while True:
-    update_metrics()
-    time.sleep(60)
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(metrics.encode('utf-8'))
+        else:
+            self.send_response(404)
 
 
-import requests
-from prometheus_client import Gauge, start_http_server
-
-# Создаем метрику
-REQUESTS_POST_METRIC = Gauge('requests_post_metric', 'Запрос на API POST', ['status_code'])
-
-# Отправляем POST-запрос и выводим ответ в виде метрики
-def request_post(url, data):
-    resp = requests.post(url, data=data)
-    REQUESTS_POST_METRIC.labels(status_code=resp.status_code).inc()
-    return resp.text
-
-# Запускаем сервер для метрик Prometheus
-if __name__ == '__main__':
-    start_http_server(8000)
-
-    # Выполняем POST-запросы и выводим ответы в виде метрик
-    url = 'http://example.com/api'
-    data = {'key': 'value'}
-    response = request_post(url, data)
-
+server = HTTPServer(('127.0.0.1', 8000), MyRequestHandler)
+server.serve_forever()
